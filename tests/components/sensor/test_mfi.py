@@ -4,6 +4,7 @@ import unittest.mock as mock
 
 import requests
 
+from homeassistant.bootstrap import setup_component
 import homeassistant.components.sensor as sensor
 import homeassistant.components.sensor.mfi as mfi
 from homeassistant.const import TEMP_CELSIUS
@@ -69,7 +70,7 @@ class TestMfiSensorSetup(unittest.TestCase):
         """Test setup with minimum configuration."""
         config = dict(self.GOOD_CONFIG)
         del config[self.THING]['port']
-        assert self.COMPONENT.setup(self.hass, config)
+        assert setup_component(self.hass, self.COMPONENT.DOMAIN, config)
         mock_client.assert_called_once_with(
             'foo', 'user', 'pass', port=6443, use_tls=True, verify=True)
 
@@ -78,7 +79,7 @@ class TestMfiSensorSetup(unittest.TestCase):
         """Test setup with port."""
         config = dict(self.GOOD_CONFIG)
         config[self.THING]['port'] = 6123
-        assert self.COMPONENT.setup(self.hass, config)
+        assert setup_component(self.hass, self.COMPONENT.DOMAIN, config)
         mock_client.assert_called_once_with(
             'foo', 'user', 'pass', port=6123, use_tls=True, verify=True)
 
@@ -89,7 +90,7 @@ class TestMfiSensorSetup(unittest.TestCase):
         del config[self.THING]['port']
         config[self.THING]['ssl'] = False
         config[self.THING]['verify_ssl'] = False
-        assert self.COMPONENT.setup(self.hass, config)
+        assert setup_component(self.hass, self.COMPONENT.DOMAIN, config)
         mock_client.assert_called_once_with(
             'foo', 'user', 'pass', port=6080, use_tls=False, verify=False)
 
@@ -103,7 +104,7 @@ class TestMfiSensorSetup(unittest.TestCase):
         print(ports['bad'].model)
         mock_client.return_value.get_devices.return_value = \
             [mock.MagicMock(ports=ports)]
-        assert sensor.setup(self.hass, self.GOOD_CONFIG)
+        assert setup_component(self.hass, sensor.DOMAIN, self.GOOD_CONFIG)
         for ident, port in ports.items():
             if ident != 'bad':
                 mock_sensor.assert_any_call(port, self.hass)
@@ -147,6 +148,11 @@ class TestMfiSensor(unittest.TestCase):
         self.port.tag = 'balloons'
         self.assertEqual('balloons', self.sensor.unit_of_measurement)
 
+    def test_uom_uninitialized(self):
+        """Test that the UOM defaults if not initialized."""
+        type(self.port).tag = mock.PropertyMock(side_effect=ValueError)
+        self.assertEqual('State', self.sensor.unit_of_measurement)
+
     def test_state_digital(self):
         """Test the digital input."""
         self.port.model = 'Input Digital'
@@ -165,6 +171,11 @@ class TestMfiSensor(unittest.TestCase):
             self.assertEqual(1.2, self.sensor.state)
         with mock.patch.dict(mfi.DIGITS, {}):
             self.assertEqual(1.0, self.sensor.state)
+
+    def test_state_uninitialized(self):
+        """Test the state of uninitialized sensors."""
+        type(self.port).tag = mock.PropertyMock(side_effect=ValueError)
+        self.assertEqual(mfi.STATE_OFF, self.sensor.state)
 
     def test_update(self):
         """Test the update."""

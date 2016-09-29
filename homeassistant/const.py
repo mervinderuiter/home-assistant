@@ -1,8 +1,42 @@
 # coding: utf-8
 """Constants used by Home Assistant components."""
+MAJOR_VERSION = 0
+MINOR_VERSION = 30
+PATCH_VERSION = '0.dev0'
+__short_version__ = '{}.{}'.format(MAJOR_VERSION, MINOR_VERSION)
+__version__ = '{}.{}'.format(__short_version__, PATCH_VERSION)
+REQUIRED_PYTHON_VER = (3, 4, 2)
 
-__version__ = '0.28.0.dev0'
-REQUIRED_PYTHON_VER = (3, 4)
+PROJECT_NAME = 'Home Assistant'
+PROJECT_PACKAGE_NAME = 'homeassistant'
+PROJECT_LICENSE = 'MIT License'
+PROJECT_AUTHOR = 'The Home Assistant Authors'
+PROJECT_COPYRIGHT = ' 2016, {}'.format(PROJECT_AUTHOR)
+PROJECT_URL = 'https://home-assistant.io/'
+PROJECT_EMAIL = 'hello@home-assistant.io'
+PROJECT_DESCRIPTION = ('Open-source home automation platform '
+                       'running on Python 3.')
+PROJECT_LONG_DESCRIPTION = ('Home Assistant is an open-source '
+                            'home automation platform running on Python 3. '
+                            'Track and control all devices at home and '
+                            'automate control. '
+                            'Installation in less than a minute.')
+PROJECT_CLASSIFIERS = [
+    'Intended Audience :: End Users/Desktop',
+    'Intended Audience :: Developers',
+    'License :: OSI Approved :: MIT License',
+    'Operating System :: OS Independent',
+    'Programming Language :: Python :: 3.4',
+    'Topic :: Home Automation'
+]
+
+PROJECT_GITHUB_USERNAME = 'home-assistant'
+PROJECT_GITHUB_REPOSITORY = 'home-assistant'
+
+PYPI_URL = 'https://pypi.python.org/pypi/{}'.format(PROJECT_PACKAGE_NAME)
+GITHUB_PATH = '{}/{}'.format(PROJECT_GITHUB_USERNAME,
+                             PROJECT_GITHUB_REPOSITORY)
+GITHUB_URL = 'https://github.com/{}'.format(GITHUB_PATH)
 
 PLATFORM_FORMAT = '{}.{}'
 
@@ -27,6 +61,7 @@ CONF_AUTHENTICATION = 'authentication'
 CONF_BEFORE = 'before'
 CONF_BELOW = 'below'
 CONF_BLACKLIST = 'blacklist'
+CONF_BRIGHTNESS = 'brightness'
 CONF_CODE = 'code'
 CONF_COMMAND = 'command'
 CONF_COMMAND_CLOSE = 'command_close'
@@ -44,6 +79,7 @@ CONF_DISARM_AFTER_TRIGGER = 'disarm_after_trigger'
 CONF_DISCOVERY = 'discovery'
 CONF_DISPLAY_OPTIONS = 'display_options'
 CONF_ELEVATION = 'elevation'
+CONF_EMAIL = 'email'
 CONF_ENTITY_ID = 'entity_id'
 CONF_ENTITY_NAMESPACE = 'entity_namespace'
 CONF_EVENT = 'event'
@@ -58,6 +94,8 @@ CONF_LATITUDE = 'latitude'
 CONF_LONGITUDE = 'longitude'
 CONF_MAC = 'mac'
 CONF_METHOD = 'method'
+CONF_MINIMUM = 'minimum'
+CONF_MAXIMUM = 'maximum'
 CONF_MONITORED_CONDITIONS = 'monitored_conditions'
 CONF_MONITORED_VARIABLES = 'monitored_variables'
 CONF_NAME = 'name'
@@ -72,9 +110,12 @@ CONF_PIN = 'pin'
 CONF_PLATFORM = 'platform'
 CONF_PORT = 'port'
 CONF_PREFIX = 'prefix'
+CONF_RECIPIENT = 'recipient'
 CONF_RESOURCE = 'resource'
 CONF_RESOURCES = 'resources'
+CONF_RGB = 'rgb'
 CONF_SCAN_INTERVAL = 'scan_interval'
+CONF_SENDER = 'sender'
 CONF_SENSOR_CLASS = 'sensor_class'
 CONF_SENSORS = 'sensors'
 CONF_SSL = 'ssl'
@@ -83,8 +124,10 @@ CONF_STRUCTURE = 'structure'
 CONF_SWITCHES = 'switches'
 CONF_TEMPERATURE_UNIT = 'temperature_unit'
 CONF_TIME_ZONE = 'time_zone'
+CONF_TIMEOUT = 'timeout'
 CONF_TOKEN = 'token'
 CONF_TRIGGER_TIME = 'trigger_time'
+CONF_TYPE = 'type'
 CONF_UNIT_OF_MEASUREMENT = 'unit_of_measurement'
 CONF_UNIT_SYSTEM = 'unit_system'
 CONF_URL = 'url'
@@ -223,6 +266,7 @@ ATTR_GPS_ACCURACY = 'gps_accuracy'
 
 # If state is assumed
 ATTR_ASSUMED_STATE = 'assumed_state'
+ATTR_STATE = 'state'
 
 # #### SERVICES ####
 SERVICE_HOMEASSISTANT_STOP = 'stop'
@@ -333,3 +377,5 @@ LENGTH = 'length'  # type: str
 MASS = 'mass'  # type: str
 VOLUME = 'volume'  # type: str
 TEMPERATURE = 'temperature'  # type: str
+SPEED_MS = 'speed_ms'  # type: str
+ILLUMINANCE = 'illuminance'  # type: str

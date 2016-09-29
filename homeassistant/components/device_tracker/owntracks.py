@@ -9,10 +9,14 @@ import logging
 import threading
 from collections import defaultdict
 
+import voluptuous as vol
+
+import homeassistant.helpers.config_validation as cv
 import homeassistant.components.mqtt as mqtt
 from homeassistant.const import STATE_HOME
 from homeassistant.util import convert, slugify
 from homeassistant.components import zone as zone_comp
+from homeassistant.components.device_tracker import PLATFORM_SCHEMA
 
 DEPENDENCIES = ['mqtt']
 
@@ -40,11 +44,17 @@ VALIDATE_WAYPOINTS = 'waypoints'
 WAYPOINT_LAT_KEY = 'lat'
 WAYPOINT_LON_KEY = 'lon'
 
+PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
+    vol.Optional(CONF_MAX_GPS_ACCURACY): vol.Coerce(float),
+    vol.Optional(CONF_WAYPOINT_IMPORT, default=True): cv.boolean,
+    vol.Optional(CONF_WAYPOINT_WHITELIST): vol.All(cv.ensure_list, [cv.string])
+})
+
 
 def setup_scanner(hass, config, see):
     """Setup an OwnTracks tracker."""
     max_gps_accuracy = config.get(CONF_MAX_GPS_ACCURACY)
-    waypoint_import = config.get(CONF_WAYPOINT_IMPORT, True)
+    waypoint_import = config.get(CONF_WAYPOINT_IMPORT)
     waypoint_whitelist = config.get(CONF_WAYPOINT_WHITELIST)
 
     def validate_payload(payload, data_type):
@@ -208,9 +218,18 @@ def setup_scanner(hass, config, see):
             lat = wayp[WAYPOINT_LAT_KEY]
             lon = wayp[WAYPOINT_LON_KEY]
             rad = wayp['rad']
+
+            # check zone exists
+            entity_id = zone_comp.ENTITY_ID_FORMAT.format(slugify(pretty_name))
+
+            # Check if state already exists
+            if hass.states.get(entity_id) is not None:
+                continue
+
             zone = zone_comp.Zone(hass, pretty_name, lat, lon, rad,
-                                  zone_comp.ICON_IMPORT, False, True)
-            zone_comp.add_zone(hass, pretty_name, zone)
+                                  zone_comp.ICON_IMPORT, False)
+            zone.entity_id = entity_id
+            zone.update_ha_state()
 
     def see_beacons(dev_id, kwargs_param):
         """Set active beacons to the current location."""

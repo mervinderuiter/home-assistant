@@ -12,7 +12,7 @@ import voluptuous as vol
 
 import homeassistant.bootstrap as bootstrap
 from homeassistant.config import load_yaml_config_file
-from homeassistant.helpers import config_per_platform, template
+from homeassistant.helpers import config_per_platform
 import homeassistant.helpers.config_validation as cv
 from homeassistant.const import CONF_NAME, CONF_PLATFORM
 from homeassistant.util import slugify
@@ -41,7 +41,7 @@ PLATFORM_SCHEMA = vol.Schema({
 
 NOTIFY_SERVICE_SCHEMA = vol.Schema({
     vol.Required(ATTR_MESSAGE): cv.template,
-    vol.Optional(ATTR_TITLE): cv.string,
+    vol.Optional(ATTR_TITLE): cv.template,
     vol.Optional(ATTR_TARGET): cv.string,
     vol.Optional(ATTR_DATA): dict,
 })
@@ -91,26 +91,31 @@ def setup(hass, config):
 
         def notify_message(notify_service, call):
             """Handle sending notification message service calls."""
+            kwargs = {}
             message = call.data[ATTR_MESSAGE]
+            title = call.data.get(ATTR_TITLE)
 
-            title = template.render(
-                hass, call.data.get(ATTR_TITLE, ATTR_TITLE_DEFAULT))
+            if title:
+                title.hass = hass
+                kwargs[ATTR_TITLE] = title.render()
+
             if targets.get(call.service) is not None:
-                target = targets[call.service]
+                kwargs[ATTR_TARGET] = targets[call.service]
             else:
-                target = call.data.get(ATTR_TARGET)
-            message = template.render(hass, message)
-            data = call.data.get(ATTR_DATA)
+                kwargs[ATTR_TARGET] = call.data.get(ATTR_TARGET)
 
-            notify_service.send_message(message, title=title, target=target,
-                                        data=data)
+            message.hass = hass
+            kwargs[ATTR_MESSAGE] = message.render()
+            kwargs[ATTR_DATA] = call.data.get(ATTR_DATA)
+
+            notify_service.send_message(**kwargs)
 
         service_call_handler = partial(notify_message, notify_service)
 
         if hasattr(notify_service, 'targets'):
             platform_name = (p_config.get(CONF_NAME) or platform)
-            for target in notify_service.targets:
-                target_name = slugify("{}_{}".format(platform_name, target))
+            for name, target in notify_service.targets.items():
+                target_name = slugify("{}_{}".format(platform_name, name))
                 targets[target_name] = target
                 hass.services.register(DOMAIN, target_name,
                                        service_call_handler,

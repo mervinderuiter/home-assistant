@@ -6,10 +6,12 @@ https://home-assistant.io/components/automation/
 """
 from functools import partial
 import logging
+import os
 
 import voluptuous as vol
 
 from homeassistant.bootstrap import prepare_setup_platform
+from homeassistant import config as conf_util
 from homeassistant.const import (
     ATTR_ENTITY_ID, CONF_PLATFORM, STATE_ON, SERVICE_TURN_ON, SERVICE_TURN_OFF,
     SERVICE_TOGGLE)
@@ -28,6 +30,7 @@ ENTITY_ID_FORMAT = DOMAIN + '.{}'
 DEPENDENCIES = ['group']
 
 CONF_ALIAS = 'alias'
+CONF_HIDE_ENTITY = 'hide_entity'
 
 CONF_CONDITION = 'condition'
 CONF_ACTION = 'action'
@@ -39,6 +42,7 @@ CONDITION_TYPE_AND = 'and'
 CONDITION_TYPE_OR = 'or'
 
 DEFAULT_CONDITION_TYPE = CONDITION_TYPE_AND
+DEFAULT_HIDE_ENTITY = False
 
 METHOD_TRIGGER = 'trigger'
 METHOD_IF_ACTION = 'if_action'
@@ -46,6 +50,7 @@ METHOD_IF_ACTION = 'if_action'
 ATTR_LAST_TRIGGERED = 'last_triggered'
 ATTR_VARIABLES = 'variables'
 SERVICE_TRIGGER = 'trigger'
+SERVICE_RELOAD = 'reload'
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -96,6 +101,7 @@ _CONDITION_SCHEMA = vol.Any(
 
 PLATFORM_SCHEMA = vol.Schema({
     CONF_ALIAS: cv.string,
+    vol.Optional(CONF_HIDE_ENTITY, default=DEFAULT_HIDE_ENTITY): cv.boolean,
     vol.Required(CONF_TRIGGER): _TRIGGER_SCHEMA,
     vol.Required(CONF_CONDITION_TYPE, default=DEFAULT_CONDITION_TYPE):
         vol.All(vol.Lower, vol.Any(CONDITION_TYPE_AND, CONDITION_TYPE_OR)),
@@ -111,6 +117,8 @@ TRIGGER_SERVICE_SCHEMA = vol.Schema({
     vol.Optional(ATTR_ENTITY_ID): cv.entity_ids,
     vol.Optional(ATTR_VARIABLES, default={}): dict,
 })
+
+RELOAD_SERVICE_SCHEMA = vol.Schema({})
 
 
 def is_on(hass, entity_id=None):
@@ -148,39 +156,22 @@ def trigger(hass, entity_id=None):
     hass.services.call(DOMAIN, SERVICE_TRIGGER, data)
 
 
+def reload(hass):
+    """Reload the automation from config."""
+    hass.services.call(DOMAIN, SERVICE_RELOAD)
+
+
 def setup(hass, config):
     """Setup the automation."""
-    # pylint: disable=too-many-locals
     component = EntityComponent(_LOGGER, DOMAIN, hass)
 
-    success = False
-    for config_key in extract_domain_configs(config, DOMAIN):
-        conf = config[config_key]
-
-        for list_no, config_block in enumerate(conf):
-            name = config_block.get(CONF_ALIAS) or "{} {}".format(config_key,
-                                                                  list_no)
-
-            action = _get_action(hass, config_block.get(CONF_ACTION, {}), name)
-
-            if CONF_CONDITION in config_block:
-                cond_func = _process_if(hass, config, config_block)
-
-                if cond_func is None:
-                    continue
-            else:
-                def cond_func(variables):
-                    """Condition will always pass."""
-                    return True
-
-            attach_triggers = partial(_process_trigger, hass, config,
-                                      config_block.get(CONF_TRIGGER, []), name)
-            entity = AutomationEntity(name, attach_triggers, cond_func, action)
-            component.add_entities((entity,))
-            success = True
+    success = _process_config(hass, config, component)
 
     if not success:
         return False
+
+    descriptions = conf_util.load_yaml_config_file(
+        os.path.join(os.path.dirname(__file__), 'services.yaml'))
 
     def trigger_service_handler(service_call):
         """Handle automation triggers."""
@@ -192,11 +183,24 @@ def setup(hass, config):
         for entity in component.extract_from_service(service_call):
             getattr(entity, service_call.service)()
 
+    def reload_service_handler(service_call):
+        """Remove all automations and load new ones from config."""
+        conf = component.prepare_reload()
+        if conf is None:
+            return
+        _process_config(hass, conf, component)
+
     hass.services.register(DOMAIN, SERVICE_TRIGGER, trigger_service_handler,
+                           descriptions.get(SERVICE_TRIGGER),
                            schema=TRIGGER_SERVICE_SCHEMA)
+
+    hass.services.register(DOMAIN, SERVICE_RELOAD, reload_service_handler,
+                           descriptions.get(SERVICE_RELOAD),
+                           schema=RELOAD_SERVICE_SCHEMA)
 
     for service in (SERVICE_TURN_ON, SERVICE_TURN_OFF, SERVICE_TOGGLE):
         hass.services.register(DOMAIN, service, service_handler,
+                               descriptions.get(service),
                                schema=SERVICE_SCHEMA)
 
     return True
@@ -205,7 +209,8 @@ def setup(hass, config):
 class AutomationEntity(ToggleEntity):
     """Entity to show status of entity."""
 
-    def __init__(self, name, attach_triggers, cond_func, action):
+    # pylint: disable=too-many-arguments, too-many-instance-attributes
+    def __init__(self, name, attach_triggers, cond_func, action, hidden):
         """Initialize an automation entity."""
         self._name = name
         self._attach_triggers = attach_triggers
@@ -214,6 +219,7 @@ class AutomationEntity(ToggleEntity):
         self._action = action
         self._enabled = True
         self._last_triggered = None
+        self._hidden = hidden
 
     @property
     def name(self):
@@ -231,6 +237,11 @@ class AutomationEntity(ToggleEntity):
         return {
             ATTR_LAST_TRIGGERED: self._last_triggered
         }
+
+    @property
+    def hidden(self) -> bool:
+        """Return True if the automation entity should be hidden from UIs."""
+        return self._hidden
 
     @property
     def is_on(self) -> bool:
@@ -262,6 +273,46 @@ class AutomationEntity(ToggleEntity):
             self._action(variables)
             self._last_triggered = utcnow()
             self.update_ha_state()
+
+    def remove(self):
+        """Remove automation from HASS."""
+        self.turn_off()
+        super().remove()
+
+
+def _process_config(hass, config, component):
+    """Process config and add automations."""
+    success = False
+
+    for config_key in extract_domain_configs(config, DOMAIN):
+        conf = config[config_key]
+
+        for list_no, config_block in enumerate(conf):
+            name = config_block.get(CONF_ALIAS) or "{} {}".format(config_key,
+                                                                  list_no)
+
+            hidden = config_block[CONF_HIDE_ENTITY]
+
+            action = _get_action(hass, config_block.get(CONF_ACTION, {}), name)
+
+            if CONF_CONDITION in config_block:
+                cond_func = _process_if(hass, config, config_block)
+
+                if cond_func is None:
+                    continue
+            else:
+                def cond_func(variables):
+                    """Condition will always pass."""
+                    return True
+
+            attach_triggers = partial(_process_trigger, hass, config,
+                                      config_block.get(CONF_TRIGGER, []), name)
+            entity = AutomationEntity(name, attach_triggers, cond_func, action,
+                                      hidden)
+            component.add_entities((entity,))
+            success = True
+
+    return success
 
 
 def _get_action(hass, config, name):

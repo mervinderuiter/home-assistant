@@ -29,6 +29,9 @@ class TestBootstrap:
 
     def teardown_method(self, method):
         """Clean up."""
+        if method == self.test_from_config_file:
+            return
+
         dt_util.DEFAULT_TIME_ZONE = ORIG_TIMEZONE
         self.hass.stop()
         loader._COMPONENT_CACHE = self.backup_cache
@@ -108,14 +111,6 @@ class TestBootstrap:
             'platform_conf.whatever', MockPlatform('whatever'))
 
         assert not bootstrap._setup_component(self.hass, 'platform_conf', {
-            'platform_conf': None
-        })
-
-        assert not bootstrap._setup_component(self.hass, 'platform_conf', {
-            'platform_conf': {}
-        })
-
-        assert not bootstrap._setup_component(self.hass, 'platform_conf', {
             'platform_conf': {
                 'hello': 'world',
                 'invalid': 'extra',
@@ -147,11 +142,26 @@ class TestBootstrap:
             }
         })
 
+        self.hass.config.components.remove('platform_conf')
+
         assert bootstrap._setup_component(self.hass, 'platform_conf', {
             'platform_conf': [{
                 'platform': 'whatever',
                 'hello': 'world',
             }]
+        })
+
+        self.hass.config.components.remove('platform_conf')
+
+        # Any falsey paltform config will be ignored (None, {}, etc)
+        assert bootstrap._setup_component(self.hass, 'platform_conf', {
+            'platform_conf': None
+        })
+
+        self.hass.config.components.remove('platform_conf')
+
+        assert bootstrap._setup_component(self.hass, 'platform_conf', {
+            'platform_conf': {}
         })
 
     def test_component_not_found(self):
@@ -211,19 +221,19 @@ class TestBootstrap:
         deps = ['non_existing']
         loader.set_component('comp', MockModule('comp', dependencies=deps))
 
-        assert not bootstrap._setup_component(self.hass, 'comp', None)
+        assert not bootstrap._setup_component(self.hass, 'comp', {})
         assert 'comp' not in self.hass.config.components
 
         self.hass.config.components.append('non_existing')
 
-        assert bootstrap._setup_component(self.hass, 'comp', None)
+        assert bootstrap._setup_component(self.hass, 'comp', {})
 
     def test_component_failing_setup(self):
         """Test component that fails setup."""
         loader.set_component(
             'comp', MockModule('comp', setup=lambda hass, config: False))
 
-        assert not bootstrap._setup_component(self.hass, 'comp', None)
+        assert not bootstrap._setup_component(self.hass, 'comp', {})
         assert 'comp' not in self.hass.config.components
 
     def test_component_exception_setup(self):
@@ -234,7 +244,7 @@ class TestBootstrap:
 
         loader.set_component('comp', MockModule('comp', setup=exception_setup))
 
-        assert not bootstrap._setup_component(self.hass, 'comp', None)
+        assert not bootstrap._setup_component(self.hass, 'comp', {})
         assert 'comp' not in self.hass.config.components
 
     def test_home_assistant_core_config_validation(self):
@@ -280,7 +290,7 @@ class TestBootstrap:
 
         loader.set_component(
             'switch.platform_a',
-            MockPlatform('comp_b', platform_schema=platform_schema))
+            MockPlatform(platform_schema=platform_schema))
 
         assert not bootstrap.setup_component(self.hass, 'switch', {
             'switch': {
