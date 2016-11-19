@@ -5,7 +5,6 @@ For more details about this platform, please refer to the documentation at
 https://home-assistant.io/components/media_player.panasonic_viera/
 """
 import logging
-import socket
 
 import voluptuous as vol
 
@@ -60,45 +59,43 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
 
     try:
         remote.get_mute()
-    except (socket.timeout, TimeoutError, OSError):
-        _LOGGER.error('Panasonic Viera TV is not available at %s:%d',
-                      host, port)
+    except OSError as error:
+        _LOGGER.error('Panasonic Viera TV is not available at %s:%d: %s',
+                      host, port, error)
         return False
 
     add_devices([PanasonicVieraTVDevice(name, remote)])
     return True
 
 
-# pylint: disable=abstract-method
 class PanasonicVieraTVDevice(MediaPlayerDevice):
     """Representation of a Panasonic Viera TV."""
 
-    # pylint: disable=too-many-public-methods
     def __init__(self, name, remote):
-        """Initialize the samsung device."""
+        """Initialize the Panasonic device."""
         # Save a reference to the imported class
         self._name = name
         self._muted = False
         self._playing = True
         self._state = STATE_UNKNOWN
         self._remote = remote
+        self._volume = 0
 
     def update(self):
         """Retrieve the latest data."""
         try:
             self._muted = self._remote.get_mute()
+            self._volume = self._remote.get_volume() / 100
             self._state = STATE_ON
-        except (socket.timeout, TimeoutError, OSError):
+        except OSError:
             self._state = STATE_OFF
-            return False
-        return True
 
     def send_key(self, key):
         """Send a key to the tv and handles exceptions."""
         try:
             self._remote.send_key(key)
             self._state = STATE_ON
-        except (socket.timeout, TimeoutError, OSError):
+        except OSError:
             self._state = STATE_OFF
             return False
         return True
@@ -116,13 +113,7 @@ class PanasonicVieraTVDevice(MediaPlayerDevice):
     @property
     def volume_level(self):
         """Volume level of the media player (0..1)."""
-        volume = 0
-        try:
-            volume = self._remote.get_volume() / 100
-            self._state = STATE_ON
-        except (socket.timeout, TimeoutError, OSError):
-            self._state = STATE_OFF
-        return volume
+        return self._volume
 
     @property
     def is_volume_muted(self):
@@ -156,7 +147,7 @@ class PanasonicVieraTVDevice(MediaPlayerDevice):
         try:
             self._remote.set_volume(volume)
             self._state = STATE_ON
-        except (socket.timeout, TimeoutError, OSError):
+        except OSError:
             self._state = STATE_OFF
 
     def media_play_pause(self):

@@ -36,7 +36,6 @@ def call_from_config(hass: HomeAssistant, config: ConfigType,
 class Script():
     """Representation of a script."""
 
-    # pylint: disable=too-many-instance-attributes
     def __init__(self, hass: HomeAssistant, sequence, name: str=None,
                  change_listener=None) -> None:
         """Initialize the script."""
@@ -94,7 +93,7 @@ class Script():
                     delay = vol.All(
                         cv.time_period,
                         cv.positive_timedelta)(
-                            delay.async_render())
+                            delay.async_render(variables))
 
                 self._async_unsub_delay_listener = \
                     async_track_point_in_utc_time(
